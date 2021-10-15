@@ -1,16 +1,94 @@
-//
-//  ContentView.swift
-//  HeartRate4 WatchKit Extension
-//
-//  Created by a on 2021/10/15.
-//
+// original code from https://github.com/amorosoluciano/SwiftFun/blob/master/ContentView.swift
 
 import SwiftUI
+import HealthKit
 
 struct ContentView: View {
+    private var healthStore = HKHealthStore()
+    let heartRateQuantity = HKUnit(from: "count/min")
+    
+    @State private var value = 0
+    
     var body: some View {
-        Text("Hello, World!")
-            .padding()
+        VStack{
+            HStack{
+                Image(systemName: "heart.fill")
+                    .font(.system(size: 50))
+                    .foregroundColor(.red)
+                Spacer()
+
+            }
+            
+            HStack{
+                Text("\(value)")
+                    .fontWeight(.regular)
+                    .font(.system(size: 70))
+                
+                Text("BPM")
+                    .font(.headline)
+                    .fontWeight(.bold)
+                    .foregroundColor(Color.red)
+                    .padding(.bottom, 28.0)
+                
+                Spacer()
+                
+            }
+
+        }
+        .padding()
+        .onAppear(perform: start)
+    }
+
+    
+    func start() {
+        autorizeHealthKit()
+        startHeartRateQuery(quantityTypeIdentifier: .heartRate)
+    }
+    
+    func autorizeHealthKit() {
+        let healthKitTypes: Set = [
+        HKObjectType.quantityType(forIdentifier: HKQuantityTypeIdentifier.heartRate)!]
+
+        healthStore.requestAuthorization(toShare: healthKitTypes, read: healthKitTypes) { _, _ in }
+    }
+    
+    private func startHeartRateQuery(quantityTypeIdentifier: HKQuantityTypeIdentifier) {
+        
+        // 1
+        let devicePredicate = HKQuery.predicateForObjects(from: [HKDevice.local()])
+        // 2
+        let updateHandler: (HKAnchoredObjectQuery, [HKSample]?, [HKDeletedObject]?, HKQueryAnchor?, Error?) -> Void = {
+            query, samples, deletedObjects, queryAnchor, error in
+            
+            // 3
+        guard let samples = samples as? [HKQuantitySample] else {
+            return
+        }
+            
+        self.process(samples, type: quantityTypeIdentifier)
+
+        }
+        
+        // 4
+        let query = HKAnchoredObjectQuery(type: HKObjectType.quantityType(forIdentifier: quantityTypeIdentifier)!, predicate: devicePredicate, anchor: nil, limit: HKObjectQueryNoLimit, resultsHandler: updateHandler)
+        
+        query.updateHandler = updateHandler
+        
+        // 5
+        
+        healthStore.execute(query)
+    }
+    
+    private func process(_ samples: [HKQuantitySample], type: HKQuantityTypeIdentifier) {
+        var lastHeartRate = 0.0
+        
+        for sample in samples {
+            if type == .heartRate {
+                lastHeartRate = sample.quantity.doubleValue(for: heartRateQuantity)
+            }
+            
+            self.value = Int(lastHeartRate)
+        }
     }
 }
 
